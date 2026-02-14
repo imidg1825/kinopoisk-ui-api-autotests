@@ -17,7 +17,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 import os
 
-API_TOKEN = os.getenv("API_TOKEN")
+API_TOKEN = (os.getenv("API_TOKEN") or "").strip()
+
 BASE_URL = "https://api.kinopoisk.dev/v1.4"
 UI_BASE_URL = "https://www.kinopoisk.ru"
 
@@ -61,34 +62,39 @@ def api_session() -> Generator[requests.Session, None, None]:
     session.close()
 
 
-# ======================
+# =========================
 # UI CONFIG
-# ======================
+# =========================
 
 
-def _build_chrome_options() -> Options:
+def build_chrome_options() -> Options:
     options = Options()
-
     options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-infobars")
     options.add_argument("--lang=ru-RU")
 
-    # важный момент — не ждём полной загрузки тяжёлых страниц
-    options.page_load_strategy = "eager"
+    # ВАЖНО: не используем eager — он часто даёт флейки на динамических страницах
+    options.page_load_strategy = "normal"
 
     return options
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def driver() -> Generator[webdriver.Chrome, None, None]:
-    options = _build_chrome_options()
+    """
+    Создаёт новый экземпляр Chrome для каждого теста.
+    Это исключает влияние тестов друг на друга
+    и повышает стабильность прогона.
+    """
+    options = build_chrome_options()
+
     service = Service(ChromeDriverManager().install())
-    drv = webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
 
-    drv.set_page_load_timeout(90)
-    drv.set_script_timeout(90)
+    driver.set_page_load_timeout(90)
+    driver.set_script_timeout(90)
 
-    yield drv
+    yield driver
 
-    drv.quit()
+    driver.quit()
